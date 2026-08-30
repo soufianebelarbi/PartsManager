@@ -222,7 +222,6 @@
     <button class="toolbtn" onclick="copySelected()">Copy</button>
     <button class="toolbtn" onclick="saveAction()">Save</button>
     <button class="toolbtn" onclick="deleteSelected()">Delete</button>
-    <button class="toolbtn" onclick="deleteAllParts()">Delete All</button>
     <button class="toolbtn" onclick="triggerImport()">Import</button>
     <button class="toolbtn" onclick="exportData()">Export</button>
     <button class="toolbtn" onclick="notImpl('Report')">Report</button>
@@ -873,7 +872,7 @@ function deleteSelected() {
   }
 
   if (!currentSelection || currentSelection.parentArray === null) {
-    alert("Select an item in the tree to delete (the root \"Parts\" node can't be deleted — use Delete All instead).");
+    alert("Select an item in the tree to delete (the root \"Parts\" node can't be deleted).");
     return;
   }
   const { node, parentArray, index } = currentSelection;
@@ -890,17 +889,6 @@ function deleteSelected() {
   renderTree();
   clearPropsPanel();
   document.getElementById("statusText").textContent = `Deleted "${node.name}". Click Save to keep this change.`;
-}
-
-function deleteAllParts() {
-  if (!confirm("Delete ALL parts? This clears the entire tree.")) return;
-  treeData.children = [];
-  currentSelection = null;
-  multiSelection = [];
-  markDirty();
-  renderTree();
-  clearPropsPanel();
-  document.getElementById("statusText").textContent = "All parts deleted. Click Save to keep this change.";
 }
 
 function copySelected() {
@@ -1172,7 +1160,6 @@ window.addItem = addItem;
 window.copySelected = copySelected;
 window.saveAction = saveAction;
 window.deleteSelected = deleteSelected;
-window.deleteAllParts = deleteAllParts;
 window.triggerImport = triggerImport;
 window.exportData = exportData;
 window.notImpl = notImpl;
