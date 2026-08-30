@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Part Management</title>
 <style>
   * { box-sizing: border-box; }
@@ -15,6 +16,7 @@
 
   .window {
     width: 1100px;
+    max-width: 100%;
     margin: 20px auto;
     background: #ECE9D8;
     border: 1px solid #0054E3;
@@ -47,6 +49,7 @@
   /* Toolbar */
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     padding: 8px 8px;
     border-bottom: 1px solid #ACA899;
@@ -68,10 +71,11 @@
   .login-screen {
     min-height: 100%;
     display: flex; align-items: center; justify-content: center;
-    padding: 20px 0;
+    padding: 20px 10px;
   }
   .login-window {
     width: 620px;
+    max-width: 100%;
     background: #ECE9D8;
     border: 1px solid #0054E3;
     box-shadow: 3px 3px 8px rgba(0,0,0,0.4);
@@ -257,6 +261,42 @@
   .db-indicator {
     display: inline-flex; align-items: center; justify-content: center;
     width: 28px; height: 28px; flex-shrink: 0;
+  }
+
+  /* ---------------------------------------------------------------
+     Smartphones — écrans étroits : on empile l'arbre et les
+     propriétés, on agrandit les cibles tactiles (boutons, touches
+     du clavier virtuel, champs), et on laisse tout prendre 100% de
+     la largeur disponible.
+  --------------------------------------------------------------- */
+  @media (max-width: 700px) {
+    .window { margin: 0; border-width: 0 0 1px 0; box-shadow: none; }
+
+    .toolbar { gap: 5px; padding: 6px; }
+    .toolbtn { flex: 1 1 calc(33% - 5px); min-width: 0; padding: 10px 4px; font-size: 12px; }
+
+    .body-area { flex-direction: column; padding: 6px; gap: 6px; }
+    .tree-panel { width: 100%; height: 260px; }
+    .props-panel { width: 100%; height: 340px; }
+
+    .statusbar { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px; }
+    .statusbar .left { flex-wrap: wrap; gap: 6px; }
+    .status-btn { flex: 1 1 auto; padding: 8px 6px; }
+    .db-state { justify-content: center; }
+
+    .login-window { width: 100%; }
+    .login-body { padding: 20px 16px 12px; }
+    .login-input { font-size: 16px; padding: 12px 10px; } /* 16px+ évite le zoom auto iOS */
+    .login-submit { padding: 14px; font-size: 16px; }
+
+    .virtual-keyboard { padding: 10px 8px 14px; }
+    .kb-row { gap: 4px; flex-wrap: wrap; }
+    .kb-key { min-width: 30px; height: 42px; font-size: 14px; flex: 1 1 8%; }
+    .kb-key.kb-wide { flex: 1 1 20%; min-width: 54px; }
+    .kb-key.kb-space { flex: 1 1 100%; min-width: 0; order: 10; }
+
+    .node-row { padding: 6px 4px; gap: 6px; }
+    .toggle { width: 18px; height: 18px; font-size: 13px; line-height: 16px; }
   }
 </style>
 </head>
