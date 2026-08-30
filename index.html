@@ -223,7 +223,8 @@
     <button class="toolbtn" onclick="saveAction()">Save</button>
     <button class="toolbtn" onclick="deleteSelected()">Delete</button>
     <button class="toolbtn" onclick="triggerImport()">Import</button>
-    <button class="toolbtn" onclick="exportData()">Export</button>
+    <button class="toolbtn" onclick="exportData()" title="Sélectionnez un Part pour n'exporter que celui-ci, sinon toute l'arborescence est exportée.">Export JSON</button>
+    <button class="toolbtn" onclick="exportDataAsXml()" title="Sélectionnez un Part pour n'exporter que celui-ci, sinon toute l'arborescence est exportée.">Export XML</button>
     <button class="toolbtn" onclick="notImpl('Report')">Report</button>
     <input type="file" id="importFile" accept=".json,.xml,application/json,text/xml" style="display:none">
   </div>
@@ -914,17 +915,137 @@ function copySelected() {
    Part/Operation/Seam/Segment export format, UTF-16 or UTF-8)
 --------------------------------------------------------------- */
 function exportData() {
-  const dataStr = JSON.stringify(treeData, null, 2);
+  // If a single Part is selected, export just that Part (wrapped so
+  // it can be re-imported later via Import, which merges it back
+  // into the Parts tree). Otherwise, export the whole tree as before.
+  const exportingSinglePart = currentSelection && multiSelection.length <= 1 && currentSelection.node.type === "part";
+
+  const dataToExport = exportingSinglePart
+    ? { name: "Parts", type: "root", children: [currentSelection.node] }
+    : treeData;
+
+  const filename = exportingSinglePart
+    ? `part_${currentSelection.node.name}_export.json`
+    : "part_management_export.json";
+
+  const dataStr = JSON.stringify(dataToExport, null, 2);
   const blob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "part_management_export.json";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  document.getElementById("statusText").textContent = "Exported to part_management_export.json";
+  document.getElementById("statusText").textContent = "Exported to " + filename;
+  setTimeout(() => { document.getElementById("statusText").textContent = defaultStatusText(); }, 1800);
+}
+
+/* ---------------------------------------------------------------
+   XML export — reverse of parseXmlImport/xml*ToNode, produces the
+   same legacy <Parts><Part><Operation><Seam><Segment> schema so a
+   file exported here can be re-imported later.
+--------------------------------------------------------------- */
+function escapeXmlAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function xmlBoolAttr(value) {
+  return value ? "True" : "False";
+}
+
+function xmlTag(tagName, attrPairs, childrenXml, indent) {
+  const attrs = attrPairs.map(([k, v]) => `${k}="${escapeXmlAttr(v)}"`).join(" ");
+  if (!childrenXml) return `${indent}<${tagName} ${attrs} />`;
+  return `${indent}<${tagName} ${attrs}>\n${childrenXml}\n${indent}</${tagName}>`;
+}
+
+function partNodeToXml(node, indent) {
+  const d = node.data || {};
+  const attrs = [
+    ["Part_Number", d["Part Number"]], ["Part_Name", d["Part Name"]], ["Part_Name2", d["Part Name 2"]],
+    ["Project", d["Project"]], ["SRtype", xmlBoolAttr(d["SRType"])], ["Ctype", d["CType"]],
+    ["in_Use", xmlBoolAttr(d["In Use"])], ["Part_Version", d["Part Version"]],
+    ["Field_extra1", d["Field Extra 1"]], ["Field_extra2", d["Field Extra 2"]],
+    ["Field_extra3", d["Field Extra 3"]], ["Field_extra4", d["Field Extra 4"]], ["Field_extra5", d["Field Extra 5"]]
+  ];
+  const children = (node.children || []).map(op => operationNodeToXml(op, indent + "  ")).join("\n");
+  return xmlTag("Part", attrs, children, indent);
+}
+
+function operationNodeToXml(node, indent) {
+  const d = node.data || {};
+  const attrs = [
+    ["Operation_Name", d["Operation Name"]], ["Station_Number", d["Station Number"]],
+    ["BobbinThread", d["Bobbin Thread"]], ["NeedleThread", d["Needle Thread"]],
+    ["Label_Format", d["Label Format"]], ["Label_Format2", d["Label Format 2"]],
+    ["CriticalComponent1", d["Critical Component 1"]], ["CriticalComponent2", d["Critical Component 2"]],
+    ["CriticalComponent3", d["Critical Component 3"]], ["CriticalComponent4", d["Critical Component 4"]],
+    ["CriticalComponent5", d["Critical Component 5"]], ["CriticalComponent6", d["Critical Component 6"]],
+    ["CriticalComponent7", d["Critical Component 7"]], ["CriticalComponent8", d["Critical Component 8"]],
+    ["CriticalComponent9", d["Critical Component 9"]], ["CriticalComponent10", d["Critical Component 10"]],
+    ["BC_Format", d["Barcode Format"]], ["BC_Format2", d["Barcode Format 2"]],
+    ["id_Grafcet", d["Grafcet ID"]], ["id_Grafcet2", d["Grafcet ID 2"]],
+    ["Interrupts", d["Interrupts"]], ["PNin", d["PNin"]], ["BCin", d["BCin"]],
+    ["PreceedingWS", d["Preceeding Workstation"]], ["BatchWork", d["Batch Work"]],
+    ["ActionBeg", d["Action Begin"]], ["ActionEnd", d["Action End"]]
+  ];
+  const children = (node.children || []).map(s => seamNodeToXml(s, indent + "  ")).join("\n");
+  return xmlTag("Operation", attrs, children, indent);
+}
+
+function seamNodeToXml(node, indent) {
+  const d = node.data || {};
+  const attrs = [
+    ["NSeam", d["Seam Number"]], ["Name", d["Seam Name"]],
+    ["bitInitialBS", xmlBoolAttr(d["Initial BS"])], ["bitFinalBS", xmlBoolAttr(d["Final BS"])],
+    ["bitFinalLC", xmlBoolAttr(d["Final LC"])], ["bitReworkable", xmlBoolAttr(d["Reworkable"])]
+  ];
+  const children = (node.children || []).map(seg => segmentNodeToXml(seg, indent + "  ")).join("\n");
+  return xmlTag("Seam", attrs, children, indent);
+}
+
+function segmentNodeToXml(node, indent) {
+  const d = node.data || {};
+  const attrs = [
+    ["NSegment", d["Segment Number"]], ["Name", d["Segment Name"]],
+    ["NStitches", d["Number of Stitches"]], ["NStitches_Max", d["Max Number of Stitches"]],
+    ["NStitches_Min", d["Min Number of Stitches"]], ["TT_Max", d["TT_Max"]], ["TT_Min", d["TT_Min"]],
+    ["MSL", d["MSL"]], ["MSL_Max", d["MSL_Max"]], ["MSL_Min", d["MSL_Min"]],
+    ["NP_Tol", d["Number of Stitches Tol TT"]], ["EndSegment", d["End Segment"]],
+    ["ActionBeg", d["Action Begin"]], ["ActionEnd", d["Action End"]], ["ErrorConditions", d["Error Conditions"]]
+  ];
+  return xmlTag("Segment", attrs, "", indent);
+}
+
+function exportDataAsXml() {
+  // Même règle que l'export JSON : un seul Part sélectionné => export
+  // limité à ce Part ; sinon toute l'arborescence est exportée.
+  const exportingSinglePart = currentSelection && multiSelection.length <= 1 && currentSelection.node.type === "part";
+  const partsToExport = exportingSinglePart ? [currentSelection.node] : treeData.children;
+
+  const body = partsToExport.map(p => partNodeToXml(p, "  ")).join("\n");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<Parts>\n${body}\n</Parts>\n`;
+
+  const filename = exportingSinglePart
+    ? `part_${currentSelection.node.name}_export.xml`
+    : "part_management_export.xml";
+
+  const blob = new Blob([xml], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  document.getElementById("statusText").textContent = "Exported to " + filename;
   setTimeout(() => { document.getElementById("statusText").textContent = defaultStatusText(); }, 1800);
 }
 
@@ -1162,6 +1283,7 @@ window.saveAction = saveAction;
 window.deleteSelected = deleteSelected;
 window.triggerImport = triggerImport;
 window.exportData = exportData;
+window.exportDataAsXml = exportDataAsXml;
 window.notImpl = notImpl;
 window.expandAll = expandAll;
 window.refreshTree = refreshTree;
