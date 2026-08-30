@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Part Management</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: "Tahoma", "Segoe UI", sans-serif;
+    font-size: 11px;
+    background: #808080;
+    height: 100%;
+  }
+
+  .window {
+    width: 860px;
+    margin: 20px auto;
+    background: #ECE9D8;
+    border: 1px solid #0054E3;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.4);
+  }
+
+  /* Title bar */
+  .titlebar {
+    background: linear-gradient(180deg, #3B90E7 0%, #0058E6 8%, #0058E6 40%, #0050D8 60%, #0041B8 100%);
+    color: #fff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .titlebar .title-left { display:flex; align-items:center; gap:6px; }
+  .titlebar .icon {
+    width: 14px; height: 14px; background:#ffcc00; border-radius:2px;
+    display:inline-block;
+  }
+  .titlebar .closebtn {
+    background: #E81123; color: #fff; border: 1px solid #900;
+    width: 20px; height: 18px; font-size: 11px; line-height: 16px;
+    text-align: center; cursor: pointer; border-radius: 2px;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 8px 8px;
+    border-bottom: 1px solid #ACA899;
+    background: #ECE9D8;
+  }
+  .toolbtn {
+    background: linear-gradient(180deg,#ffffff 0%, #ECE9D8 100%);
+    border: 1px solid #ACA899;
+    padding: 6px 14px;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 2px;
+    min-width: 56px;
+  }
+  .toolbtn:hover { background: #FFF8E0; border-color:#CC9933; }
+  .toolbtn:active { background: #E0DCC8; }
+
+  /* Body layout */
+  .body-area {
+    display: flex;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  fieldset {
+    border: 1px groove #ACA899;
+    background: #F5F4EE;
+    margin: 0;
+  }
+
+  /* Tree panel */
+  .tree-panel {
+    width: 250px;
+    height: 480px;
+    background: #fff;
+    border: 1px solid #7F9DB9;
+    overflow: auto;
+    padding: 4px;
+  }
+  .tree ul { list-style: none; margin: 0; padding-left: 16px; }
+  .tree > ul { padding-left: 4px; }
+  .tree li { position: relative; white-space: nowrap; }
+  .node-row {
+    display: flex; align-items: center; gap: 3px;
+    padding: 1px 2px; cursor: pointer; border-radius: 2px;
+    user-select: none; -webkit-user-select: none; -ms-user-select: none;
+  }
+  .node-row:hover { background: #E5F3FF; }
+  .node-row.selected { background: #316AC5; color: #fff; }
+  .toggle {
+    width: 12px; height: 12px; border: 1px solid #7F9DB9; background: #fff;
+    font-size: 9px; line-height: 10px; text-align: center; flex-shrink:0;
+    cursor: pointer; user-select: none; color:#333;
+  }
+  .toggle.leaf { visibility: hidden; }
+  .node-icon { width: 13px; text-align:center; flex-shrink:0; }
+  .children { display: none; }
+  .children.open { display: block; }
+
+  /* Properties panel */
+  .props-panel {
+    flex: 1;
+    height: 480px;
+    overflow-y: auto;
+  }
+  .props-path {
+    font-weight: bold;
+    padding: 2px 2px 6px 2px;
+  }
+  .props-fieldset legend {
+    padding: 0 4px;
+    font-weight: bold;
+  }
+  .props-fieldset {
+    padding: 10px 12px;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 7px;
+  }
+  .field-label {
+    width: 150px;
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  .field-input {
+    flex: 1;
+    border: 1px solid #7F9DB9;
+    background: #fff;
+    padding: 3px 4px;
+    font-size: 11px;
+    font-family: inherit;
+  }
+  .field-input[readonly] { background: #fff; }
+  .field-input.checkbox {
+    flex: none;
+    width: 14px; height: 14px;
+    border: 1px solid #555;
+    accent-color: #0058E6;
+  }
+  .field-with-btn { flex:1; display:flex; gap:4px; }
+  .field-with-btn .field-input { flex:1; }
+  .dots-btn {
+    width: 24px;
+    border: 1px solid #ACA899;
+    background: linear-gradient(180deg,#fff 0%, #ECE9D8 100%);
+    cursor: pointer;
+  }
+  .empty-hint {
+    color: #888;
+    font-style: italic;
+    padding: 8px 2px;
+  }
+
+  /* Status bar */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-top: 1px solid #ACA899;
+    background: #ECE9D8;
+    font-size: 11px;
+  }
+  .statusbar .left { display:flex; gap:10px; align-items:center; }
+  .status-btn {
+    background: linear-gradient(180deg,#fff 0%, #ECE9D8 100%);
+    border: 1px solid #ACA899;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .db-state { display:flex; align-items:center; gap:6px; }
+  .db-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    transition: background .2s ease, border-color .2s ease;
+  }
+  .db-dot.saved {
+    background: radial-gradient(circle at 35% 30%, #8CF08C, #1EA31E);
+    border: 1px solid #0a6b0a;
+  }
+  .db-dot.unsaved {
+    background: radial-gradient(circle at 35% 30%, #F08C8C, #A31E1E);
+    border: 1px solid #6b0a0a;
+  }
+  .db-dot.loading {
+    background: radial-gradient(circle at 35% 30%, #E8E4D8, #ACA899);
+    border: 1px solid #7f7b6e;
+  }
+  .db-loading-gif {
+    width: 28px; height: 28px; display: none; vertical-align: middle;
+  }
+  .db-indicator {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <div class="titlebar">
+    <div class="title-left">
+      <span class="icon"></span>
+      <span>Part Management</span>
+    </div>
+    <div class="closebtn">✕</div>
+  </div>
+
+  <div class="toolbar">
+    <button class="toolbtn" onclick="addItem()">Add</button>
+    <button class="toolbtn" onclick="copySelected()">Copy</button>
+    <button class="toolbtn" onclick="saveAction()">Save</button>
+    <button class="toolbtn" onclick="deleteSelected()">Delete</button>
+    <button class="toolbtn" onclick="deleteAllParts()">Delete All</button>
+    <button class="toolbtn" onclick="triggerImport()">Import</button>
+    <button class="toolbtn" onclick="exportData()">Export</button>
+    <button class="toolbtn" onclick="notImpl('Report')">Report</button>
+    <input type="file" id="importFile" accept=".json,.xml,application/json,text/xml" style="display:none">
+  </div>
+
+  <div class="body-area">
+    <fieldset class="tree-panel-wrap" style="padding:0;border:none;background:transparent;">
+      <div class="tree-panel">
+        <div class="tree" id="tree"></div>
+      </div>
+    </fieldset>
+
+    <div class="props-panel" id="propsPanel">
+      <div class="props-path">Parts</div>
+      <fieldset class="props-fieldset">
+        <legend>Parts Properties</legend>
+        <div class="empty-hint">Select an item in the tree to view its properties.</div>
+      </fieldset>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <div class="left">
+      <button class="status-btn" onclick="expandAll()">Expand All</button>
+      <button class="status-btn" onclick="refreshTree()">Refresh</button>
+      <button class="status-btn" onclick="resetData()" title="Clear saved changes and restore defaults">Reset</button>
+      <span id="statusText">Total of 17 Parts and 10 Operations stored in the database</span>
+    </div>
+    <div class="db-state">
+      <span>Database State:</span>
+      <span class="db-indicator">
+        <img src="loading.gif" id="dbLoadingGif" class="db-loading-gif" style="display:none;" alt="Sauvegarde en cours..." title="Sauvegarde en cours...">
+        <span class="db-dot loading" id="dbDot" style="display:inline-block;" title="Vérification de l'état de la sauvegarde..."></span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ---------------------------------------------------------------
+   Firebase — remplace localStorage : les données sont lues/écrites
+   dans Firestore, ce qui permet de les partager entre appareils une
+   fois le site déployé sur Netlify / GitHub Pages.
+
+   ÉTAPES À FAIRE AVANT DE DÉPLOYER :
+   1. Créer un projet sur https://console.firebase.google.com
+   2. Dans le projet, activer "Firestore Database" (mode production
+      ou test, peu importe pour démarrer).
+   3. Dans les paramètres du projet (roue crantée > Paramètres du
+      projet > Vos applications > Web), créer une "app web" et
+      copier l'objet de config affiché à la place de celui
+      ci-dessous (firebaseConfig).
+   4. Dans Firestore > Règles, restreindre l'accès en écriture /
+      lecture (les valeurs ci-dessous sont ouvertes en lecture et
+      écriture par défaut si non configurées — pensez à les
+      resserrer, par ex. avec l'authentification Firebase, avant un
+      usage en production).
+--------------------------------------------------------------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// TODO : remplacer par la config de VOTRE projet Firebase.
+const firebaseConfig = {
+  apiKey: "AIzaSyDhPAuUylhuEtz_AP_RF7vsbByaE_jJ-y4",
+  authDomain: "parts-manager-d2e8d.firebaseapp.com",
+  projectId: "parts-manager-d2e8d",
+  storageBucket: "parts-manager-d2e8d.firebasestorage.app",
+  messagingSenderId: "542318535644",
+  appId: "1:542318535644:web:f02c35d0a9e4367e97a519"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+// Toutes les données de l'arbre sont stockées dans un seul document.
+// (Simple et suffisant pour un usage mono-utilisateur / mono-atelier ;
+// on pourrait plus tard passer à un document par pièce si besoin.)
+const FIRESTORE_COLLECTION = "partManagement";
+const FIRESTORE_DOC_ID = "main";
+const treeDocRef = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
+
+/* ---------------------------------------------------------------
+   Persistence — save/load the whole tree to Firestore so that
+   edits survive a page reload / reopening the app, and are shared
+   across devices.
+--------------------------------------------------------------- */
+async function loadSavedData() {
+  try {
+    const snap = await getDoc(treeDocRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      // On stocke l'arbre sérialisé sous le champ "tree" (Firestore
+      // n'aime pas les documents dont la racine est un tableau brut).
+      if (data && data.tree) return JSON.parse(data.tree);
+    }
+  } catch (e) {
+    console.warn("Could not read saved data from Firebase:", e);
+  }
+  return null;
+}
+
+async function persistData() {
+  try {
+    await setDoc(treeDocRef, { tree: JSON.stringify(treeData), updatedAt: new Date().toISOString() });
+    return true;
+  } catch (e) {
+    console.warn("Could not save data to Firebase:", e);
+    return false;
+  }
+}
+
+/* ---------------------------------------------------------------
+   "Database State" indicator — reflects whether the in-memory tree
+   matches what's actually stored on Firebase (green) or has local
+   changes that haven't been saved yet (red). While a save/load is
+   actually in flight, the loading.gif is shown instead of the dot.
+--------------------------------------------------------------- */
+function setDbLoading(isLoading) {
+  const dot = document.getElementById("dbDot");
+  const gif = document.getElementById("dbLoadingGif");
+  if (gif) gif.style.display = isLoading ? "inline-block" : "none";
+  if (dot) dot.style.display = isLoading ? "none" : "inline-block";
+}
+
+function setDbState(saved) {
+  setDbLoading(false);
+  const dot = document.getElementById("dbDot");
+  if (!dot) return;
+  dot.classList.remove("loading");
+  dot.classList.toggle("saved", saved);
+  dot.classList.toggle("unsaved", !saved);
+  dot.title = saved
+    ? "Toutes les modifications sont enregistrées sur Firebase."
+    : "Modifications non enregistrées — cliquez sur Save.";
+}
+function markDirty() { setDbState(false); }
+function markSaved() { setDbState(true); }
+
+/* ---------------------------------------------------------------
+   Data model — mirrors the Part Management tool's hierarchy:
+   Parts -> Operations -> Seams -> Segments
+--------------------------------------------------------------- */
+const defaultTreeData = {
+  name: "Parts",
+  type: "root",
+  children: [
+    simplePart("10"),
+    simplePart("11"),
+    fullPart(),
+    simplePart("227927722"),
+    simplePart("227932123"),
+    simplePart("227932223"),
+    simplePart("227972625"),
+    simplePart("227973825"),
+    simplePart("227978426"),
+    simplePart("227978626"),
+    simplePart("227982327"),
+    simplePart("227982627"),
+    simplePart("25"),
+    simplePart("31"),
+    simplePart("32"),
+    simplePart("33"),
+    simplePart("PN_CONC"),
+  ]
+};
+
+// Valeurs par défaut affichées immédiatement ; remplacées dès que le
+// chargement depuis Firebase se termine (voir la section "init" en
+// bas du fichier), déclarée avec `let` pour qu'Import puisse la
+// remplacer entièrement.
+let treeData = defaultTreeData;
+
+function simplePart(num) {
+  return {
+    name: num, type: "part",
+    data: {
+      "Part Number": num, "Part Name": "", "Part Name 2": "",
+      "Project": "", "SRType": false, "CType": "", "In Use": false
+    },
+    children: []
+  };
+}
+
+function newOperation(name) {
+  return {
+    name: name, type: "operation",
+    data: {
+      "Operation Name": "", "Station Number": "",
+      "Bobbin Thread": "", "Needle Thread": "", "Label Format": "",
+      "Critical Component 1": "", "Critical Component 2": "", "Critical Component 3": "",
+      "Critical Component 4": "", "Critical Component 5": "", "Critical Component 6": "",
+      "Critical Component 7": "", "Critical Component 8": "", "Critical Component 9": "",
+      "Critical Component 10": "",
+      "Barcode Format": "", "Grafcet ID": "", "Grafcet ID 2": "",
+      "Interrupts": "", "PNin": "", "BCin": "",
+      "Preceeding Workstation": "", "Batch Work": "",
+      "Action Begin": "", "Action End": ""
+    },
+    children: []
+  };
+}
+
+function newSeam(name) {
+  return {
+    name: name, type: "seam",
+    data: {
+      "Seam Number": "", "Seam Name": "",
+      "Initial BS": false, "Final BS": false, "Final LC": false, "Reworkable": false
+    },
+    children: []
+  };
+}
+
+function newSegment(name) {
+  return {
+    name: name, type: "segment",
+    data: {
+      "Segment Number": "", "Segment Name": "",
+      "Number of Stitches": "", "Max Number of Stitches": "", "Min Number of Stitches": "",
+      "TT_Max": "", "TT_Min": "",
+      "MSL": "", "MSL_Max": "", "MSL_Min": "",
+      "Number of Stitches Tol TT": "",
+      "End Segment": "", "Action Begin": "", "Action End": "", "Error Conditions": ""
+    },
+    children: []
+  };
+}
+
+function fullPart() {
+  return {
+    name: "227927322", type: "part",
+    data: {
+      "Part Number": "227927322", "Part Name": "Concentrator No Deco", "Part Name 2": "",
+      "Project": "P21", "SRType": true, "CType": "", "In Use": true
+    },
+    children: [
+      {
+        name: "OP_CC_NODECO", type: "operation",
+        data: {
+          "Operation Name": "OP_CC_NODECO", "Station Number": "3",
+          "Bobbin Thread": "1070015XXXXXX", "Needle Thread": "1070015XXXXXX",
+          "Label Format": "P21Conf.AUP",
+          "Critical Component 1": "A 01_16=[D]PXXXXXXXXXXXXXXXX[U]CODABAR AIRBAG:",
+          "Critical Component 2": "", "Critical Component 3": "", "Critical Component 4": "",
+          "Critical Component 5": "", "Critical Component 6": "", "Critical Component 7": "",
+          "Critical Component 8": "", "Critical Component 9": "", "Critical Component 10": "",
+          "Barcode Format": "C[YY][MM][DD][NM2][SSSS]",
+          "Grafcet ID": "1", "Grafcet ID 2": "3",
+          "Interrupts": "1;2;3;4;5",
+          "PNin": "PN IN_[00|01|09]",
+          "BCin": "B [N]",
+          "Preceeding Workstation": "0",
+          "Batch Work": "0",
+          "Action Begin": "", "Action End": ""
+        },
+        children: [
+          {
+            name: "1", type: "seam",
+            data: {
+              "Seam Number": "1", "Seam Name": "COUT #1",
+              "Initial BS": true, "Final BS": true, "Final LC": true, "Reworkable": true
+            },
+            children: [
+              {
+                name: "1", type: "segment",
+                data: {
+                  "Segment Number": "1", "Segment Name": "SEGM #1",
+                  "Number of Stitches": "0", "Max Number of Stitches": "0", "Min Number of Stitches": "38",
+                  "TT_Max": "0", "TT_Min": "0",
+                  "MSL": "0,00", "MSL_Max": "0,00", "MSL_Min": "0,00",
+                  "Number of Stitches Tol TT": "0",
+                  "End Segment": "! IL 000",
+                  "Action Begin": ";N2;V 01;ACK",
+                  "Action End": ";P 0;ACK",
+                  "Error Conditions": "! IL 008;! IL 009"
+                },
+                children: []
+              }
+            ]
+          },
+          { name: "2", type: "seam", data: { "Seam Number": "2", "Seam Name": "", "Initial BS": false, "Final BS": false, "Final LC": false, "Reworkable": false }, children: [] }
+        ]
+      }
+    ]
+  };
+}
+
+const iconFor = { root: "🗂", part: "📄", operation: "⚙", seam: "✂", segment: "▪" };
+
+/* ---------------------------------------------------------------
+   Tree rendering
+--------------------------------------------------------------- */
+// Tracks what's currently selected so Delete/Copy know exactly which
+// array + index to operate on: { node, path, parentArray, index }
+let currentSelection = null;
+
+// Tracks a Shift+click multi-selection for bulk Delete: an array of
+// { node, path, parentArray, index } — always siblings from the same
+// parentArray. Shift+click only ever toggles the exact item clicked
+// (no automatic fill of the items in between).
+let multiSelection = [];
+
+// Tracks which nodes are currently expanded in the tree, so re-rendering
+// after Add/Delete/Copy doesn't collapse everything back down.
+let expandedNodes = new Set([treeData]);
+
+function renderTree() {
+  const container = document.getElementById("tree");
+  container.innerHTML = "";
+  const ul = document.createElement("ul");
+  ul.appendChild(makeNodeLi(treeData, [treeData.name], null, null));
+  container.appendChild(ul);
+}
+
+function makeNodeLi(node, path, parentArray, index) {
+  const li = document.createElement("li");
+
+  const row = document.createElement("div");
+  row.className = "node-row";
+  row.dataset.path = path.join("\u0001");
+
+  const hasChildren = node.children && node.children.length > 0;
+  const isOpen = expandedNodes.has(node);
+  const toggle = document.createElement("span");
+  toggle.className = "toggle" + (hasChildren ? "" : " leaf");
+  toggle.textContent = hasChildren ? (isOpen ? "−" : "+") : "";
+  row.appendChild(toggle);
+
+  const icon = document.createElement("span");
+  icon.className = "node-icon";
+  icon.textContent = iconFor[node.type] || "📄";
+  row.appendChild(icon);
+
+  const label = document.createElement("span");
+  label.className = "node-label";
+  label.textContent = node.name;
+  row.appendChild(label);
+
+  li.appendChild(row);
+
+  let childUl = null;
+  if (hasChildren) {
+    childUl = document.createElement("ul");
+    childUl.className = "children" + (isOpen ? " open" : "");
+    node.children.forEach((ch, idx) => {
+      childUl.appendChild(makeNodeLi(ch, path.concat(ch.name), node.children, idx));
+    });
+    li.appendChild(childUl);
+  }
+
+  row.addEventListener("mousedown", (e) => {
+    // A Shift+click is a browser text-selection gesture by default —
+    // block it so it doesn't highlight text across the tree.
+    if (e.shiftKey) e.preventDefault();
+  });
+
+  row.addEventListener("click", (e) => {
+    if (e.shiftKey && parentArray !== null && (multiSelection.length === 0 || multiSelection[0].parentArray === parentArray)) {
+      toggleMultiSelect(row, node, path, parentArray, index);
+    } else {
+      selectNode(row, node, path, parentArray, index);
+    }
+  });
+
+  toggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!childUl) return;
+    const open = childUl.classList.toggle("open");
+    toggle.textContent = open ? "−" : "+";
+    if (open) expandedNodes.add(node); else expandedNodes.delete(node);
+  });
+
+  return li;
+}
+
+function selectNode(row, node, path, parentArray, index) {
+  document.querySelectorAll(".node-row.selected").forEach(el => el.classList.remove("selected"));
+  row.classList.add("selected");
+  currentSelection = { node, path, parentArray, index };
+  multiSelection = [currentSelection];
+  renderProperties(node, path);
+}
+
+// Shift+click: adds (or, if already selected, removes) just the
+// clicked item to the multi-selection — items skipped over in
+// between are left untouched, unlike a range selection.
+function toggleMultiSelect(row, node, path, parentArray, index) {
+  const existingIdx = multiSelection.findIndex(s => s.parentArray === parentArray && s.index === index);
+
+  if (existingIdx !== -1) {
+    multiSelection.splice(existingIdx, 1);
+    row.classList.remove("selected");
+  } else {
+    multiSelection.push({ node, path, parentArray, index });
+    row.classList.add("selected");
+  }
+
+  if (multiSelection.length === 0) {
+    currentSelection = null;
+    clearPropsPanel();
+  } else if (multiSelection.length === 1) {
+    currentSelection = multiSelection[0];
+    renderProperties(currentSelection.node, currentSelection.path);
+  } else {
+    currentSelection = multiSelection[multiSelection.length - 1];
+    showMultiSelectionSummary(multiSelection.length);
+  }
+}
+
+// Clicking empty space in the tree panel (not on an actual node row)
+// clears the selection, so a stray click can't leave an old
+// selection active for Delete/Add without the user noticing.
+function deselectAll() {
+  document.querySelectorAll(".node-row.selected").forEach(el => el.classList.remove("selected"));
+  currentSelection = null;
+  multiSelection = [];
+  clearPropsPanel();
+}
+
+function showMultiSelectionSummary(count) {
+  document.getElementById("propsPanel").innerHTML =
+    `<div class="props-path">${count} éléments sélectionnés</div>` +
+    `<fieldset class="props-fieldset"><legend>Sélection multiple</legend>` +
+    `<div class="empty-hint">Cliquez sur "Delete" pour supprimer les ${count} éléments sélectionnés.</div></fieldset>`;
+}
+
+function expandAll() {
+  collectExpandable(treeData);
+  renderTree();
+}
+
+function collectExpandable(node) {
+  if (node.children && node.children.length) {
+    expandedNodes.add(node);
+    node.children.forEach(collectExpandable);
+  }
+}
+
+function refreshTree() {
+  renderTree();
+  clearPropsPanel();
+  document.getElementById("statusText").textContent = defaultStatusText();
+}
+
+function clearPropsPanel() {
+  document.getElementById("propsPanel").innerHTML =
+    '<div class="props-path">Parts</div><fieldset class="props-fieldset"><legend>Parts Properties</legend><div class="empty-hint">Select an item in the tree to view its properties.</div></fieldset>';
+}
+
+/* ---------------------------------------------------------------
+   Properties panel rendering — layout mirrors each node type
+--------------------------------------------------------------- */
+const legends = {
+  root: "Parts Properties",
+  part: (n) => n + " Properties",
+  operation: (n) => n + " Properties",
+  seam: (n) => n + " Properties",
+  segment: (n) => n + " Properties"
+};
+
+const fieldsWithButton = ["Barcode Format", "Action Begin", "Action End"];
+
+function renderProperties(node, path) {
+  const panel = document.getElementById("propsPanel");
+  const pathStr = path.join("\\");
+  const legendText = typeof legends[node.type] === "function" ? legends[node.type](node.name) : legends[node.type];
+
+  let html = `<div class="props-path">${escapeHtml(pathStr)}</div>`;
+  html += `<fieldset class="props-fieldset"><legend>${escapeHtml(legendText)}</legend>`;
+
+  const dataKeys = Object.keys(node.data || {});
+  if (dataKeys.length === 0) {
+    html += `<div class="empty-hint">No properties defined for this node.</div>`;
+  } else {
+    dataKeys.forEach(key => {
+      const val = node.data[key];
+      html += `<div class="field-row">`;
+      html += `<div class="field-label">${escapeHtml(key)}</div>`;
+      if (typeof val === "boolean") {
+        html += `<input type="checkbox" class="field-input checkbox" ${val ? "checked" : ""} data-key="${escapeHtml(key)}">`;
+      } else if (fieldsWithButton.includes(key)) {
+        html += `<div class="field-with-btn">
+                    <input type="text" class="field-input" value="${escapeAttr(val)}" data-key="${escapeHtml(key)}">
+                    <button class="dots-btn">...</button>
+                  </div>`;
+      } else {
+        html += `<input type="text" class="field-input" value="${escapeAttr(val)}" data-key="${escapeHtml(key)}">`;
+      }
+      html += `</div>`;
+    });
+  }
+
+  html += `</fieldset>`;
+  panel.innerHTML = html;
+
+  // wire up live edits back into the data model
+  panel.querySelectorAll("[data-key]").forEach(input => {
+    input.addEventListener("input", () => {
+      const key = input.dataset.key;
+      markDirty();
+      if (input.type === "checkbox") {
+        node.data[key] = input.checked;
+        return;
+      }
+      node.data[key] = input.value;
+
+      // Keep the "Part Number" field in sync with the program's name
+      // shown in the Parts tree, without rebuilding the whole tree
+      // (which would drop focus out of this input while typing).
+      if (node.type === "part" && key === "Part Number") {
+        const displayName = input.value.trim() || node.name;
+        node.name = displayName;
+        path[path.length - 1] = displayName;
+        if (currentSelection) currentSelection.path = path;
+
+        const pathEl = panel.querySelector(".props-path");
+        if (pathEl) pathEl.textContent = path.join("\\");
+
+        const selectedLabel = document.querySelector(".node-row.selected .node-label");
+        if (selectedLabel) selectedLabel.textContent = displayName;
+      }
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+/* ---------------------------------------------------------------
+   Toolbar actions (demo stubs)
+--------------------------------------------------------------- */
+function notImpl(action) {
+  document.getElementById("statusText").textContent = action + " clicked (demo only)";
+  setTimeout(() => {
+    document.getElementById("statusText").textContent = defaultStatusText();
+  }, 1500);
+}
+
+async function saveAction() {
+  document.getElementById("statusText").textContent = "Sauvegarde vers Firebase...";
+  setDbLoading(true);
+  const ok = await persistData();
+  document.getElementById("statusText").textContent = ok
+    ? "Saved — your changes have been stored on Firebase."
+    : "Save failed — Firebase unavailable (vérifiez la config / la connexion).";
+  if (ok) markSaved(); else markDirty();
+  setTimeout(() => {
+    document.getElementById("statusText").textContent = defaultStatusText();
+  }, 1800);
+}
+
+function defaultStatusText() {
+  const partCount = treeData.children.length;
+  let opCount = 0;
+  treeData.children.forEach(p => opCount += (p.children ? p.children.length : 0));
+  return `Total of ${partCount} Parts and ${opCount} Operations stored in the database`;
+}
+
+async function resetData() {
+  if (!confirm("Discard saved changes and restore the default data? Cela réinitialise aussi les données sur Firebase.")) return;
+  treeData = JSON.parse(JSON.stringify(defaultTreeData));
+  currentSelection = null;
+  multiSelection = [];
+  expandedNodes = new Set([treeData]);
+  document.getElementById("statusText").textContent = "Réinitialisation...";
+  const ok = await persistData();
+  if (ok) markSaved(); else markDirty();
+  renderTree();
+  clearPropsPanel();
+  document.getElementById("statusText").textContent = defaultStatusText();
+}
+
+// Defines what "Add" creates next, based on the type of the
+// currently selected node — mirrors the Part → Operation →
+// Seam → Segment hierarchy.
+const ADD_CHAIN = {
+  part:      { label: "Operation", prompt: "Nom / numéro de la nouvelle opération :",  factory: newOperation },
+  operation: { label: "Seam",      prompt: "Numéro / nom de la nouvelle couture (seam) :", factory: newSeam },
+  seam:      { label: "Segment",   prompt: "Numéro / nom du nouveau segment :",        factory: newSegment }
+};
+
+function addItem() {
+  if (multiSelection.length > 1) {
+    alert("Sélectionnez un seul élément avant d'utiliser Add.");
+    return;
+  }
+  const sel = currentSelection;
+
+  // Rien de sélectionné (ou la racine "Parts") -> on ajoute une pièce
+  if (!sel || sel.node.type === "root") {
+    const num = prompt("Numéro / nom de la nouvelle pièce :", "NEW_" + Math.floor(Math.random() * 1000));
+    if (num === null) return;
+    const trimmed = num.trim();
+    if (!trimmed) { alert("Le nom ne peut pas être vide."); return; }
+    const part = simplePart(trimmed);
+    part.data["Part Number"] = ""; // le libellé de l'arbre n'affecte pas ce champ
+    treeData.children.push(part);
+    markDirty();
+    renderTree();
+    document.getElementById("statusText").textContent = "Part added: " + trimmed + " (click Save to keep it)";
+    return;
+  }
+
+  const parent = sel.node;
+  const step = ADD_CHAIN[parent.type];
+
+  if (!step) {
+    alert("Impossible d'ajouter un sous-élément ici (niveau le plus bas de l'arbre).");
+    return;
+  }
+
+  const name = prompt(step.prompt, "");
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed) { alert("Le nom ne peut pas être vide."); return; }
+
+  parent.children.push(step.factory(trimmed));
+  markDirty();
+  expandedNodes.add(parent);
+  renderTree();
+  document.getElementById("statusText").textContent = `${step.label} added: ${trimmed} (click Save to keep it)`;
+}
+
+/* ---------------------------------------------------------------
+   Delete / Copy — operate on whatever is currently selected
+--------------------------------------------------------------- */
+function deleteSelected() {
+  // Bulk delete — a Shift+click range was selected.
+  if (multiSelection.length > 1) {
+    const parentArray = multiSelection[0].parentArray;
+    const names = multiSelection.map(s => s.node.name).join(", ");
+    if (!confirm(`Delete these ${multiSelection.length} items (${names})?`)) return;
+
+    // Remove from highest index to lowest so earlier indices stay valid.
+    multiSelection.map(s => s.index).sort((a, b) => b - a).forEach(i => parentArray.splice(i, 1));
+
+    const count = multiSelection.length;
+    currentSelection = null;
+    multiSelection = [];
+    markDirty();
+    renderTree();
+    clearPropsPanel();
+    document.getElementById("statusText").textContent = `${count} éléments supprimés. Click Save to keep this change.`;
+    return;
+  }
+
+  if (!currentSelection || currentSelection.parentArray === null) {
+    alert("Select an item in the tree to delete (the root \"Parts\" node can't be deleted — use Delete All instead).");
+    return;
+  }
+  const { node, parentArray, index } = currentSelection;
+  const childCount = node.children ? node.children.length : 0;
+  const warning = childCount > 0
+    ? `Delete "${node.name}" and its ${childCount} sub-item(s)?`
+    : `Delete "${node.name}"?`;
+  if (!confirm(warning)) return;
+
+  parentArray.splice(index, 1);
+  currentSelection = null;
+  multiSelection = [];
+  markDirty();
+  renderTree();
+  clearPropsPanel();
+  document.getElementById("statusText").textContent = `Deleted "${node.name}". Click Save to keep this change.`;
+}
+
+function deleteAllParts() {
+  if (!confirm("Delete ALL parts? This clears the entire tree.")) return;
+  treeData.children = [];
+  currentSelection = null;
+  multiSelection = [];
+  markDirty();
+  renderTree();
+  clearPropsPanel();
+  document.getElementById("statusText").textContent = "All parts deleted. Click Save to keep this change.";
+}
+
+function copySelected() {
+  if (multiSelection.length > 1) {
+    alert("Sélectionnez un seul élément pour le copier.");
+    return;
+  }
+  if (!currentSelection || currentSelection.parentArray === null) {
+    alert("Select an item in the tree to copy (the root \"Parts\" node can't be copied).");
+    return;
+  }
+  const { node, parentArray, index } = currentSelection;
+  const clone = JSON.parse(JSON.stringify(node));
+  clone.name = node.name.replace(/_COPY\d*$/, "") + "_COPY";
+  parentArray.splice(index + 1, 0, clone);
+  markDirty();
+  renderTree();
+  document.getElementById("statusText").textContent = `Copied "${node.name}" as "${clone.name}". Click Save to keep this change.`;
+}
+
+/* ---------------------------------------------------------------
+   Export / Import — .json (native format) or .xml (legacy
+   Part/Operation/Seam/Segment export format, UTF-16 or UTF-8)
+--------------------------------------------------------------- */
+function exportData() {
+  const dataStr = JSON.stringify(treeData, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "part_management_export.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  document.getElementById("statusText").textContent = "Exported to part_management_export.json";
+  setTimeout(() => { document.getElementById("statusText").textContent = defaultStatusText(); }, 1800);
+}
+
+function triggerImport() {
+  document.getElementById("importFile").click();
+}
+
+document.getElementById("importFile").addEventListener("change", function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (evt) {
+    try {
+      const text = decodeFileText(evt.target.result);
+      const looksXml = file.name.toLowerCase().endsWith(".xml") || text.trim().startsWith("<");
+
+      const imported = looksXml ? parseXmlImport(text) : parseJsonImport(text);
+      const importedChildren = imported.children || [];
+
+      // Merge: add the imported programs alongside the ones already
+      // present in the tree instead of wiping the existing data.
+      const addedCount = mergeImportedChildren(importedChildren);
+      markDirty();
+
+      currentSelection = null;
+      multiSelection = [];
+      expandedNodes.add(treeData);
+      renderTree();
+      clearPropsPanel();
+      document.getElementById("statusText").textContent =
+        `${addedCount} programme(s) importé(s) et ajouté(s) depuis "${file.name}". Click Save to keep this data.`;
+    } catch (err) {
+      alert("Impossible d'importer ce fichier : " + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file); // read as bytes so we can detect the text encoding ourselves
+  e.target.value = ""; // allow re-importing the same file later
+});
+
+// Appends imported top-level parts to the existing tree instead of
+// replacing it. If an imported part's name collides with one already
+// present, it's renamed (e.g. "10" -> "10_IMPORT2") so nothing is
+// silently overwritten. Returns the number of parts added.
+function mergeImportedChildren(newChildren) {
+  const existingNames = new Set(treeData.children.map(c => c.name));
+  let addedCount = 0;
+  newChildren.forEach(child => {
+    let name = child.name;
+    if (existingNames.has(name)) {
+      let i = 2;
+      let candidate = `${name}_IMPORT${i}`;
+      while (existingNames.has(candidate)) { i++; candidate = `${name}_IMPORT${i}`; }
+      child.name = candidate;
+      name = candidate;
+    }
+    existingNames.add(name);
+    treeData.children.push(child);
+    addedCount++;
+  });
+  return addedCount;
+}
+
+function parseJsonImport(text) {
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.children)) {
+    throw new Error('le fichier ne ressemble pas à un export Part Management (tableau "children" manquant)');
+  }
+  return parsed;
+}
+
+// Decodes a file's raw bytes to text, auto-detecting UTF-16 (LE/BE,
+// with or without BOM) vs UTF-8 — the legacy export tool writes
+// "encoding=UTF-16" XML files.
+function decodeFileText(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return new TextDecoder("utf-16le").decode(bytes.slice(2));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    return new TextDecoder("utf-16be").decode(bytes.slice(2));
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return new TextDecoder("utf-8").decode(bytes.slice(3));
+  }
+  // No BOM: guess UTF-16LE if there's a suspiciously high rate of
+  // zero bytes on odd offsets (typical of ASCII text stored as UTF-16LE).
+  let zeroCount = 0;
+  const sampleLen = Math.min(bytes.length, 400);
+  for (let i = 1; i < sampleLen; i += 2) if (bytes[i] === 0) zeroCount++;
+  if (sampleLen > 0 && zeroCount > sampleLen / 4) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+/* ---------------------------------------------------------------
+   Legacy XML import — maps <Parts><Part><Operation><Seam><Segment>
+   attributes onto our internal Part/Operation/Seam/Segment model.
+--------------------------------------------------------------- */
+function xmlBool(v) {
+  return !!v && v.trim().toLowerCase() === "true";
+}
+
+function parseXmlImport(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  const err = doc.querySelector("parsererror");
+  if (err) throw new Error("XML invalide : " + err.textContent.trim().slice(0, 200));
+
+  const root = doc.documentElement;
+  if (!root || root.tagName !== "Parts") {
+    throw new Error('le fichier ne contient pas d\'élément racine "<Parts>".');
+  }
+
+  const children = Array.from(root.children)
+    .filter(el => el.tagName === "Part")
+    .map(xmlPartToNode);
+
+  return { name: "Parts", type: "root", children };
+}
+
+function xmlPartToNode(partEl) {
+  const g = (n) => partEl.getAttribute(n) || "";
+  const data = {
+    "Part Number": g("Part_Number"),
+    "Part Name": g("Part_Name"),
+    "Part Name 2": g("Part_Name2"),
+    "Project": g("Project"),
+    "SRType": xmlBool(partEl.getAttribute("SRtype")),
+    "CType": g("Ctype"),
+    "In Use": xmlBool(partEl.getAttribute("in_Use")),
+    "Part Version": g("Part_Version"),
+    "Field Extra 1": g("Field_extra1"),
+    "Field Extra 2": g("Field_extra2"),
+    "Field Extra 3": g("Field_extra3"),
+    "Field Extra 4": g("Field_extra4"),
+    "Field Extra 5": g("Field_extra5")
+  };
+  const name = data["Part Number"] || data["Part Name"] || "PART";
+  const node = { name, type: "part", data, children: [] };
+
+  Array.from(partEl.children).forEach(el => {
+    if (el.tagName === "Operation") node.children.push(xmlOperationToNode(el));
+  });
+  return node;
+}
+
+function xmlOperationToNode(opEl) {
+  const g = (n) => opEl.getAttribute(n) || "";
+  const data = {
+    "Operation Name": g("Operation_Name"),
+    "Station Number": g("Station_Number"),
+    "Bobbin Thread": g("BobbinThread"),
+    "Needle Thread": g("NeedleThread"),
+    "Label Format": g("Label_Format"),
+    "Label Format 2": g("Label_Format2"),
+    "Critical Component 1": g("CriticalComponent1"),
+    "Critical Component 2": g("CriticalComponent2"),
+    "Critical Component 3": g("CriticalComponent3"),
+    "Critical Component 4": g("CriticalComponent4"),
+    "Critical Component 5": g("CriticalComponent5"),
+    "Critical Component 6": g("CriticalComponent6"),
+    "Critical Component 7": g("CriticalComponent7"),
+    "Critical Component 8": g("CriticalComponent8"),
+    "Critical Component 9": g("CriticalComponent9"),
+    "Critical Component 10": g("CriticalComponent10"),
+    "Barcode Format": g("BC_Format"),
+    "Barcode Format 2": g("BC_Format2"),
+    "Grafcet ID": g("id_Grafcet"),
+    "Grafcet ID 2": g("id_Grafcet2"),
+    "Interrupts": g("Interrupts"),
+    "PNin": g("PNin"),
+    "BCin": g("BCin"),
+    "Preceeding Workstation": g("PreceedingWS"),
+    "Batch Work": g("BatchWork"),
+    "Action Begin": g("ActionBeg"),
+    "Action End": g("ActionEnd")
+  };
+  const name = data["Operation Name"] || "OPERATION";
+  const node = { name, type: "operation", data, children: [] };
+  Array.from(opEl.children).forEach(el => {
+    if (el.tagName === "Seam") node.children.push(xmlSeamToNode(el));
+  });
+  return node;
+}
+
+function xmlSeamToNode(seamEl) {
+  const g = (n) => seamEl.getAttribute(n) || "";
+  const data = {
+    "Seam Number": g("NSeam"),
+    "Seam Name": g("Name"),
+    "Initial BS": xmlBool(seamEl.getAttribute("bitInitialBS")),
+    "Final BS": xmlBool(seamEl.getAttribute("bitFinalBS")),
+    "Final LC": xmlBool(seamEl.getAttribute("bitFinalLC")),
+    "Reworkable": xmlBool(seamEl.getAttribute("bitReworkable"))
+  };
+  const name = data["Seam Number"] || "1";
+  const node = { name, type: "seam", data, children: [] };
+  Array.from(seamEl.children).forEach(el => {
+    if (el.tagName === "Segment") node.children.push(xmlSegmentToNode(el));
+  });
+  return node;
+}
+
+function xmlSegmentToNode(segEl) {
+  const g = (n) => segEl.getAttribute(n) || "";
+  const data = {
+    "Segment Number": g("NSegment"),
+    "Segment Name": g("Name"),
+    "Number of Stitches": g("NStitches"),
+    "Max Number of Stitches": g("NStitches_Max"),
+    "Min Number of Stitches": g("NStitches_Min"),
+    "TT_Max": g("TT_Max"),
+    "TT_Min": g("TT_Min"),
+    "MSL": g("MSL"),
+    "MSL_Max": g("MSL_Max"),
+    "MSL_Min": g("MSL_Min"),
+    "Number of Stitches Tol TT": g("NP_Tol"),
+    "End Segment": g("EndSegment"),
+    "Action Begin": g("ActionBeg"),
+    "Action End": g("ActionEnd"),
+    "Error Conditions": g("ErrorConditions")
+  };
+  const name = data["Segment Number"] || "1";
+  return { name, type: "segment", data, children: [] };
+}
+
+/* init */
+// Les boutons de la barre d'outils utilisent des attributs
+// onclick="..." dans le HTML ; comme ce script est un module (import
+// Firebase), ses fonctions ne sont plus globales par défaut — on les
+// expose donc explicitement sur window.
+window.addItem = addItem;
+window.copySelected = copySelected;
+window.saveAction = saveAction;
+window.deleteSelected = deleteSelected;
+window.deleteAllParts = deleteAllParts;
+window.triggerImport = triggerImport;
+window.exportData = exportData;
+window.notImpl = notImpl;
+window.expandAll = expandAll;
+window.refreshTree = refreshTree;
+window.resetData = resetData;
+
+renderTree();
+document.getElementById("statusText").textContent = "Chargement des données depuis Firebase...";
+
+// Charge les données sauvegardées sur Firebase (si présentes) et
+// affiche l'arbre correspondant une fois reçues.
+(async function initFromFirebase() {
+  try {
+    const saved = await loadSavedData();
+    if (saved) {
+      treeData = saved;
+      markSaved(); // ce qui est affiché correspond exactement à Firebase
+    } else {
+      markDirty(); // rien d'enregistré sur Firebase pour l'instant
+    }
+  } catch (e) {
+    console.warn("Firebase indisponible, utilisation des données par défaut :", e);
+    markDirty();
+  }
+  expandedNodes = new Set([treeData]);
+  renderTree();
+  document.getElementById("statusText").textContent = defaultStatusText();
+})();
+
+// A click that lands on the tree panel itself (not on a node row —
+// e.g. below the last item, or in the margin) deselects everything.
+document.querySelector(".tree-panel").addEventListener("click", (e) => {
+  if (!e.target.closest(".node-row")) deselectAll();
+});
+</script>
+
+</body>
+</html>
