@@ -14,7 +14,7 @@
   }
 
   .window {
-    width: 860px;
+    width: 1100px;
     margin: 20px auto;
     background: #ECE9D8;
     border: 1px solid #0054E3;
@@ -64,6 +64,60 @@
   .toolbtn:hover { background: #FFF8E0; border-color:#CC9933; }
   .toolbtn:active { background: #E0DCC8; }
 
+  /* Login screen */
+  .login-screen {
+    min-height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px 0;
+  }
+  .login-window {
+    width: 620px;
+    background: #ECE9D8;
+    border: 1px solid #0054E3;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.4);
+  }
+  .login-body { padding: 28px 32px 16px; }
+  .login-field { margin-bottom: 18px; }
+  .login-field label {
+    display: block; margin-bottom: 5px; font-weight: bold; color: #333;
+    font-size: 14px;
+  }
+  .login-input {
+    width: 100%; padding: 10px 10px; font-size: 16px;
+    border: 1px solid #7F9DB9; border-radius: 3px;
+    font-family: inherit;
+  }
+  .login-input:focus { outline: 2px solid #3B90E7; border-color: #3B90E7; }
+  .login-error {
+    color: #C00; font-size: 13px; min-height: 18px; margin-bottom: 10px;
+  }
+  .login-submit {
+    width: 100%; padding: 12px; font-size: 15px; font-weight: bold;
+  }
+
+  /* Virtual on-screen keyboard */
+  .virtual-keyboard {
+    padding: 16px 18px 20px;
+    border-top: 1px solid #ACA899;
+    background: #DDD9C6;
+    user-select: none;
+  }
+  .kb-row { display: flex; gap: 6px; margin-bottom: 6px; justify-content: center; }
+  .kb-key {
+    background: linear-gradient(180deg,#ffffff 0%, #ECE9D8 100%);
+    border: 1px solid #ACA899;
+    border-radius: 4px;
+    min-width: 42px; height: 44px;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .kb-key:hover { background: #FFF8E0; border-color:#CC9933; }
+  .kb-key:active { background: #E0DCC8; }
+  .kb-key.kb-wide { min-width: 86px; font-size: 13px; }
+  .kb-key.kb-space { min-width: 320px; }
+  .kb-key.kb-active-shift { background: #FFE082; border-color:#CC9933; }
+
   /* Body layout */
   .body-area {
     display: flex;
@@ -79,8 +133,8 @@
 
   /* Tree panel */
   .tree-panel {
-    width: 250px;
-    height: 480px;
+    width: 300px;
+    height: 620px;
     background: #fff;
     border: 1px solid #7F9DB9;
     overflow: auto;
@@ -109,7 +163,7 @@
   /* Properties panel */
   .props-panel {
     flex: 1;
-    height: 480px;
+    height: 620px;
     overflow-y: auto;
   }
   .props-path {
@@ -208,7 +262,32 @@
 </head>
 <body>
 
-<div class="window">
+<!-- ============ Login screen (shown until the password is correct) ============ -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-window">
+    <div class="titlebar">
+      <div class="title-left">
+        <span class="icon"></span>
+        <span>Connexion — Part Management</span>
+      </div>
+    </div>
+    <div class="login-body">
+      <div class="login-field">
+        <label for="loginUser">Utilisateur</label>
+        <input type="text" id="loginUser" class="login-input" autocomplete="off">
+      </div>
+      <div class="login-field">
+        <label for="loginPass">Mot de passe</label>
+        <input type="password" id="loginPass" class="login-input" autocomplete="off">
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <button class="toolbtn login-submit" id="loginSubmitBtn">Login</button>
+    </div>
+    <div class="virtual-keyboard" id="virtualKeyboard"></div>
+  </div>
+</div>
+
+<div class="window" id="appWindow" style="display:none;">
   <div class="titlebar">
     <div class="title-left">
       <span class="icon"></span>
@@ -284,6 +363,105 @@
 --------------------------------------------------------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ---------------------------------------------------------------
+   Login screen — un simple mot de passe codé ici (PAS une vraie
+   sécurité : n'importe qui peut le lire dans le code source de la
+   page). Suffisant pour éviter qu'un clic accidentel n'ouvre l'app,
+   mais à remplacer par Firebase Authentication si un vrai contrôle
+   d'accès est nécessaire plus tard.
+--------------------------------------------------------------- */
+const VALID_USERNAME = "1";
+const VALID_PASSWORD = "wlcoxbksn";
+
+function checkLogin() {
+  const user = document.getElementById("loginUser").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  const errorEl = document.getElementById("loginError");
+
+  if (user === VALID_USERNAME && pass === VALID_PASSWORD) {
+    document.getElementById("loginScreen").style.display = "none";
+    document.getElementById("appWindow").style.display = "";
+    errorEl.textContent = "";
+  } else {
+    errorEl.textContent = "Utilisateur ou mot de passe incorrect.";
+  }
+}
+
+/* ---------------------------------------------------------------
+   Clavier virtuel — s'affiche sous les champs de connexion pour
+   permettre de saisir au clic/tactile (écrans sans clavier
+   physique). Le champ actif (Utilisateur ou Mot de passe) reçoit
+   les caractères cliqués.
+--------------------------------------------------------------- */
+let kbActiveField = null; // référence au dernier champ de login focalisé
+let kbShift = false;
+
+const KB_ROWS = [
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+  ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+  ["z", "x", "c", "v", "b", "n", "m"]
+];
+
+function buildVirtualKeyboard() {
+  const kb = document.getElementById("virtualKeyboard");
+  kb.innerHTML = "";
+
+  KB_ROWS.forEach(row => {
+    const rowEl = document.createElement("div");
+    rowEl.className = "kb-row";
+    row.forEach(ch => {
+      const key = document.createElement("div");
+      key.className = "kb-key";
+      key.textContent = kbShift ? ch.toUpperCase() : ch;
+      key.addEventListener("click", () => insertKbChar(key.textContent));
+      rowEl.appendChild(key);
+    });
+    kb.appendChild(rowEl);
+  });
+
+  const bottomRow = document.createElement("div");
+  bottomRow.className = "kb-row";
+
+  const shiftKey = document.createElement("div");
+  shiftKey.className = "kb-key kb-wide" + (kbShift ? " kb-active-shift" : "");
+  shiftKey.textContent = "Maj";
+  shiftKey.addEventListener("click", () => { kbShift = !kbShift; buildVirtualKeyboard(); });
+  bottomRow.appendChild(shiftKey);
+
+  const spaceKey = document.createElement("div");
+  spaceKey.className = "kb-key kb-space";
+  spaceKey.textContent = "Espace";
+  spaceKey.addEventListener("click", () => insertKbChar(" "));
+  bottomRow.appendChild(spaceKey);
+
+  const backspaceKey = document.createElement("div");
+  backspaceKey.className = "kb-key kb-wide";
+  backspaceKey.textContent = "⌫";
+  backspaceKey.addEventListener("click", removeKbChar);
+  bottomRow.appendChild(backspaceKey);
+
+  const enterKey = document.createElement("div");
+  enterKey.className = "kb-key kb-wide";
+  enterKey.textContent = "Entrée";
+  enterKey.addEventListener("click", checkLogin);
+  bottomRow.appendChild(enterKey);
+
+  kb.appendChild(bottomRow);
+}
+
+function insertKbChar(ch) {
+  if (!kbActiveField) kbActiveField = document.getElementById("loginUser");
+  kbActiveField.value += ch;
+  kbActiveField.focus();
+}
+
+function removeKbChar() {
+  if (!kbActiveField) kbActiveField = document.getElementById("loginUser");
+  kbActiveField.value = kbActiveField.value.slice(0, -1);
+  kbActiveField.focus();
+}
 
 // TODO : remplacer par la config de VOTRE projet Firebase.
 const firebaseConfig = {
@@ -1288,6 +1466,18 @@ window.notImpl = notImpl;
 window.expandAll = expandAll;
 window.refreshTree = refreshTree;
 window.resetData = resetData;
+
+// Écran de connexion : clavier virtuel + suivi du champ actif + soumission
+buildVirtualKeyboard();
+const loginUserEl = document.getElementById("loginUser");
+const loginPassEl = document.getElementById("loginPass");
+[loginUserEl, loginPassEl].forEach(el => {
+  el.addEventListener("focus", () => { kbActiveField = el; });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter") checkLogin(); });
+});
+kbActiveField = loginUserEl;
+loginUserEl.focus();
+document.getElementById("loginSubmitBtn").addEventListener("click", checkLogin);
 
 renderTree();
 document.getElementById("statusText").textContent = "Chargement des données depuis Firebase...";
