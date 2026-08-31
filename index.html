@@ -249,7 +249,15 @@
     cursor: pointer;
     border-radius: 2px;
   }
-  .db-state { display:flex; align-items:center; gap:6px; }
+  .db-state { display:flex; align-items:center; gap:6px; flex-wrap: wrap; }
+  .recent-changes {
+    margin-left: 10px;
+    padding-left: 10px;
+    border-left: 1px solid #ACA899;
+    color: #555;
+    font-size: 11px;
+    white-space: nowrap;
+  }
   /* Quand ce bloc est déplacé en haut (au-dessus du toolbar) sur mobile,
      on lui donne son propre bandeau, distinct du style "coin de la
      statusbar" utilisé en desktop. */
@@ -400,6 +408,7 @@
         <img src="loading.gif" id="dbLoadingGif" class="db-loading-gif" style="display:none;" alt="Sauvegarde en cours..." title="Sauvegarde en cours...">
         <span class="db-dot loading" id="dbDot" style="display:inline-block;" title="Vérification de l'état de la sauvegarde..."></span>
       </span>
+      <span class="recent-changes" id="recentChangesText">Recent Changes: —</span>
     </div>
   </div>
 </div>
@@ -567,11 +576,16 @@ const treeDocRef = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
    edits survive a page reload / reopening the app, and are shared
    across devices.
 --------------------------------------------------------------- */
+// Horodatage de la dernière sauvegarde connue sur Firebase (chaîne
+// ISO), affiché sous "Recent Changes" à côté de "Database State".
+let lastSavedTimestamp = null;
+
 async function loadSavedData() {
   try {
     const snap = await getDoc(treeDocRef);
     if (snap.exists()) {
       const data = snap.data();
+      if (data && data.updatedAt) lastSavedTimestamp = data.updatedAt;
       // On stocke l'arbre sérialisé sous le champ "tree" (Firestore
       // n'aime pas les documents dont la racine est un tableau brut).
       if (data && data.tree) return JSON.parse(data.tree);
@@ -584,7 +598,9 @@ async function loadSavedData() {
 
 async function persistData() {
   try {
-    await setDoc(treeDocRef, { tree: JSON.stringify(treeData), updatedAt: new Date().toISOString() });
+    const now = new Date().toISOString();
+    await setDoc(treeDocRef, { tree: JSON.stringify(treeData), updatedAt: now });
+    lastSavedTimestamp = now;
     return true;
   } catch (e) {
     console.warn("Could not save data to Firebase:", e);
@@ -615,9 +631,27 @@ function setDbState(saved) {
   dot.title = saved
     ? "Toutes les modifications sont enregistrées sur Firebase."
     : "Modifications non enregistrées — cliquez sur Save.";
+  if (saved) updateRecentChangesDisplay(); // le timestamp de dernière sauvegarde vient de se confirmer
 }
 function markDirty() { setDbState(false); }
 function markSaved() { setDbState(true); }
+
+function formatTimestamp(isoString) {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return "—";
+  // Affiche toujours en GMT+1 (décalage fixe), peu importe le fuseau
+  // horaire réglé sur l'appareil de l'utilisateur.
+  const gmt1 = new Date(d.getTime() + 60 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(gmt1.getUTCDate())}/${pad(gmt1.getUTCMonth() + 1)}/${gmt1.getUTCFullYear()} at ${pad(gmt1.getUTCHours())}:${pad(gmt1.getUTCMinutes())} (GMT+1)`;
+}
+
+function updateRecentChangesDisplay() {
+  const el = document.getElementById("recentChangesText");
+  if (!el) return;
+  el.textContent = "Recent Changes: " + formatTimestamp(lastSavedTimestamp);
+}
 
 /* ---------------------------------------------------------------
    Data model — mirrors the Part Management tool's hierarchy:
