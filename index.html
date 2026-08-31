@@ -136,6 +136,17 @@
   }
 
   /* Tree panel */
+  .tree-search-input {
+    display: block;
+    width: 300px;
+    margin-bottom: 4px;
+    padding: 5px 6px;
+    font-size: 12px;
+    font-family: inherit;
+    border: 1px solid #7F9DB9;
+    border-radius: 2px;
+  }
+  .tree-search-input:focus { outline: 2px solid #3B90E7; border-color: #3B90E7; }
   .tree-panel {
     width: 300px;
     height: 620px;
@@ -239,6 +250,15 @@
     border-radius: 2px;
   }
   .db-state { display:flex; align-items:center; gap:6px; }
+  /* Quand ce bloc est déplacé en haut (au-dessus du toolbar) sur mobile,
+     on lui donne son propre bandeau, distinct du style "coin de la
+     statusbar" utilisé en desktop. */
+  #appWindow > .db-state {
+    justify-content: center;
+    padding: 8px;
+    background: #ECE9D8;
+    border-bottom: 1px solid #ACA899;
+  }
   .db-dot {
     width: 12px; height: 12px; border-radius: 50%;
     transition: background .2s ease, border-color .2s ease;
@@ -276,6 +296,7 @@
     .toolbtn { flex: 1 1 calc(33% - 5px); min-width: 0; padding: 10px 4px; font-size: 12px; }
 
     .body-area { flex-direction: column; padding: 6px; gap: 6px; }
+    .tree-search-input { width: 100%; }
     .tree-panel { width: 100%; height: 260px; }
     .props-panel { width: 100%; height: 340px; }
 
@@ -336,7 +357,7 @@
     <div class="closebtn">✕</div>
   </div>
 
-  <div class="toolbar">
+  <div class="toolbar" id="mainToolbar">
     <button class="toolbtn" onclick="addItem()">Add</button>
     <button class="toolbtn" onclick="copySelected()">Copy</button>
     <button class="toolbtn" onclick="saveAction()">Save</button>
@@ -350,6 +371,7 @@
 
   <div class="body-area">
     <fieldset class="tree-panel-wrap" style="padding:0;border:none;background:transparent;">
+      <input type="text" id="treeSearchInput" class="tree-search-input" placeholder="Search Parts">
       <div class="tree-panel">
         <div class="tree" id="tree"></div>
       </div>
@@ -364,14 +386,15 @@
     </div>
   </div>
 
-  <div class="statusbar">
+  <div class="statusbar" id="mainStatusbar">
     <div class="left">
-      <button class="status-btn" onclick="expandAll()">Expand All</button>
+      <button class="status-btn" id="expandAllBtn" onclick="expandAll()">Expand All</button>
       <button class="status-btn" onclick="refreshTree()">Refresh</button>
-      <button class="status-btn" onclick="resetData()" title="Clear saved changes and restore defaults">Reset</button>
+      <button class="status-btn" onclick="resetData()" title="Annuler les changements non sauvegardés de cette session">Reset</button>
+      <button class="status-btn" onclick="logout()" title="Se déconnecter et redemander les identifiants">Logout</button>
       <span id="statusText">Total of 17 Parts and 10 Operations stored in the database</span>
     </div>
-    <div class="db-state">
+    <div class="db-state" id="dbStateBlock">
       <span>Database State:</span>
       <span class="db-indicator">
         <img src="loading.gif" id="dbLoadingGif" class="db-loading-gif" style="display:none;" alt="Sauvegarde en cours..." title="Sauvegarde en cours...">
@@ -413,6 +436,12 @@ import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/fireb
 --------------------------------------------------------------- */
 const VALID_USERNAME = "1";
 const VALID_PASSWORD = "wlcoxbksn";
+const AUTH_STORAGE_KEY = "part_management_authenticated";
+
+function showApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appWindow").style.display = "";
+}
 
 function checkLogin() {
   const user = document.getElementById("loginUser").value.trim();
@@ -420,12 +449,22 @@ function checkLogin() {
   const errorEl = document.getElementById("loginError");
 
   if (user === VALID_USERNAME && pass === VALID_PASSWORD) {
-    document.getElementById("loginScreen").style.display = "none";
-    document.getElementById("appWindow").style.display = "";
+    // Mémorise la connexion (navigateur/appareil) pour ne pas
+    // redemander les identifiants à chaque ouverture de l'app.
+    try { localStorage.setItem(AUTH_STORAGE_KEY, "true"); } catch (e) { /* stockage indisponible, tant pis */ }
+    showApp();
     errorEl.textContent = "";
   } else {
     errorEl.textContent = "Utilisateur ou mot de passe incorrect.";
   }
+}
+
+function logout() {
+  try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (e) { /* ignore */ }
+  document.getElementById("loginUser").value = "";
+  document.getElementById("loginPass").value = "";
+  document.getElementById("appWindow").style.display = "none";
+  document.getElementById("loginScreen").style.display = "";
 }
 
 /* ---------------------------------------------------------------
@@ -748,12 +787,17 @@ let multiSelection = [];
 // after Add/Delete/Copy doesn't collapse everything back down.
 let expandedNodes = new Set([treeData]);
 
+// Texte actuellement tapé dans la barre de recherche : ne filtre que
+// les Parts (niveau racine) dont le nom le contient.
+let searchTerm = "";
+
 function renderTree() {
   const container = document.getElementById("tree");
   container.innerHTML = "";
   const ul = document.createElement("ul");
   ul.appendChild(makeNodeLi(treeData, [treeData.name], null, null));
   container.appendChild(ul);
+  updateExpandAllButtonLabel();
 }
 
 function makeNodeLi(node, path, parentArray, index) {
@@ -763,7 +807,14 @@ function makeNodeLi(node, path, parentArray, index) {
   row.className = "node-row";
   row.dataset.path = path.join("\u0001");
 
-  const hasChildren = node.children && node.children.length > 0;
+  // Au niveau racine (les Parts), si une recherche est active, on ne
+  // garde que les Parts dont le nom contient le texte recherché.
+  const isRoot = node === treeData;
+  const childrenToShow = (isRoot && searchTerm)
+    ? node.children.filter(ch => ch.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    : (node.children || []);
+
+  const hasChildren = childrenToShow.length > 0;
   const isOpen = expandedNodes.has(node);
   const toggle = document.createElement("span");
   toggle.className = "toggle" + (hasChildren ? "" : " leaf");
@@ -782,14 +833,23 @@ function makeNodeLi(node, path, parentArray, index) {
 
   li.appendChild(row);
 
+  const noSearchResults = isRoot && searchTerm && childrenToShow.length === 0;
+
   let childUl = null;
   if (hasChildren) {
     childUl = document.createElement("ul");
     childUl.className = "children" + (isOpen ? " open" : "");
-    node.children.forEach((ch, idx) => {
+    childrenToShow.forEach(ch => {
+      const idx = node.children.indexOf(ch); // vrai index dans le tableau d'origine (pour Delete/Copy/Add)
       childUl.appendChild(makeNodeLi(ch, path.concat(ch.name), node.children, idx));
     });
     li.appendChild(childUl);
+  } else if (noSearchResults) {
+    const hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.style.padding = "6px 4px";
+    hint.textContent = `Aucun Part ne correspond à "${searchTerm}".`;
+    li.appendChild(hint);
   }
 
   row.addEventListener("mousedown", (e) => {
@@ -812,6 +872,7 @@ function makeNodeLi(node, path, parentArray, index) {
     const open = childUl.classList.toggle("open");
     toggle.textContent = open ? "−" : "+";
     if (open) expandedNodes.add(node); else expandedNodes.delete(node);
+    updateExpandAllButtonLabel();
   });
 
   return li;
@@ -869,14 +930,34 @@ function showMultiSelectionSummary(count) {
 }
 
 function expandAll() {
-  collectExpandable(treeData);
+  const allExpandableNodes = [];
+  collectExpandableList(treeData, allExpandableNodes);
+
+  // Si tout est déjà développé, un second clic réduit tout ;
+  // sinon on développe tout.
+  const isFullyExpanded = allExpandableNodes.every(n => expandedNodes.has(n));
+
+  if (isFullyExpanded) {
+    expandedNodes = new Set([treeData]); // garde juste la racine ouverte
+  } else {
+    allExpandableNodes.forEach(n => expandedNodes.add(n));
+  }
   renderTree();
 }
 
-function collectExpandable(node) {
+function updateExpandAllButtonLabel() {
+  const btn = document.getElementById("expandAllBtn");
+  if (!btn) return;
+  const allExpandableNodes = [];
+  collectExpandableList(treeData, allExpandableNodes);
+  const isFullyExpanded = allExpandableNodes.length > 0 && allExpandableNodes.every(n => expandedNodes.has(n));
+  btn.textContent = isFullyExpanded ? "Collapse All" : "Expand All";
+}
+
+function collectExpandableList(node, out) {
   if (node.children && node.children.length) {
-    expandedNodes.add(node);
-    node.children.forEach(collectExpandable);
+    out.push(node);
+    node.children.forEach(ch => collectExpandableList(ch, out));
   }
 }
 
@@ -982,6 +1063,12 @@ function notImpl(action) {
   }, 1500);
 }
 
+// Dernier état connu comme étant réellement enregistré sur Firebase.
+// Sert de référence pour "Reset" : annuler uniquement les changements
+// faits depuis cette sauvegarde, sans revenir aux données d'origine
+// codées en dur.
+let lastSavedSnapshot = null;
+
 async function saveAction() {
   document.getElementById("statusText").textContent = "Sauvegarde vers Firebase...";
   setDbLoading(true);
@@ -989,7 +1076,12 @@ async function saveAction() {
   document.getElementById("statusText").textContent = ok
     ? "Saved — your changes have been stored on Firebase."
     : "Save failed — Firebase unavailable (vérifiez la config / la connexion).";
-  if (ok) markSaved(); else markDirty();
+  if (ok) {
+    lastSavedSnapshot = JSON.parse(JSON.stringify(treeData)); // devient la nouvelle référence pour Reset
+    markSaved();
+  } else {
+    markDirty();
+  }
   setTimeout(() => {
     document.getElementById("statusText").textContent = defaultStatusText();
   }, 1800);
@@ -1002,15 +1094,17 @@ function defaultStatusText() {
   return `Total of ${partCount} Parts and ${opCount} Operations stored in the database`;
 }
 
-async function resetData() {
-  if (!confirm("Discard saved changes and restore the default data? Cela réinitialise aussi les données sur Firebase.")) return;
-  treeData = JSON.parse(JSON.stringify(defaultTreeData));
+function resetData() {
+  if (!confirm("Annuler les modifications faites depuis la dernière sauvegarde et revenir aux dernières données enregistrées ?")) return;
+  // On revient au dernier état sauvegardé (ou aux données par défaut
+  // si rien n'a encore jamais été sauvegardé) — Firebase n'est pas
+  // modifié, puisqu'on ne fait qu'annuler des changements locaux
+  // non enregistrés.
+  treeData = JSON.parse(JSON.stringify(lastSavedSnapshot || defaultTreeData));
   currentSelection = null;
   multiSelection = [];
   expandedNodes = new Set([treeData]);
-  document.getElementById("statusText").textContent = "Réinitialisation...";
-  const ok = await persistData();
-  if (ok) markSaved(); else markDirty();
+  markSaved(); // l'affichage correspond de nouveau exactement à Firebase
   renderTree();
   clearPropsPanel();
   document.getElementById("statusText").textContent = defaultStatusText();
@@ -1039,7 +1133,7 @@ function addItem() {
     const trimmed = num.trim();
     if (!trimmed) { alert("Le nom ne peut pas être vide."); return; }
     const part = simplePart(trimmed);
-    part.data["Part Number"] = ""; // le libellé de l'arbre n'affecte pas ce champ
+    part.data["Part Number"] = trimmed; // garde le champ synchronisé avec le nom donné au Part
     treeData.children.push(part);
     markDirty();
     renderTree();
@@ -1188,9 +1282,7 @@ function partNodeToXml(node, indent) {
   const attrs = [
     ["Part_Number", d["Part Number"]], ["Part_Name", d["Part Name"]], ["Part_Name2", d["Part Name 2"]],
     ["Project", d["Project"]], ["SRtype", xmlBoolAttr(d["SRType"])], ["Ctype", d["CType"]],
-    ["in_Use", xmlBoolAttr(d["In Use"])], ["Part_Version", d["Part Version"]],
-    ["Field_extra1", d["Field Extra 1"]], ["Field_extra2", d["Field Extra 2"]],
-    ["Field_extra3", d["Field Extra 3"]], ["Field_extra4", d["Field Extra 4"]], ["Field_extra5", d["Field Extra 5"]]
+    ["in_Use", xmlBoolAttr(d["In Use"])]
   ];
   const children = (node.children || []).map(op => operationNodeToXml(op, indent + "  ")).join("\n");
   return xmlTag("Part", attrs, children, indent);
@@ -1317,6 +1409,9 @@ function mergeImportedChildren(newChildren) {
       let candidate = `${name}_IMPORT${i}`;
       while (existingNames.has(candidate)) { i++; candidate = `${name}_IMPORT${i}`; }
       child.name = candidate;
+      // Garde le champ "Part Number" synchronisé avec le nom affiché
+      // dans l'arbre, comme lors d'une édition manuelle du champ.
+      if (child.data) child.data["Part Number"] = candidate;
       name = candidate;
     }
     existingNames.add(name);
@@ -1393,13 +1488,7 @@ function xmlPartToNode(partEl) {
     "Project": g("Project"),
     "SRType": xmlBool(partEl.getAttribute("SRtype")),
     "CType": g("Ctype"),
-    "In Use": xmlBool(partEl.getAttribute("in_Use")),
-    "Part Version": g("Part_Version"),
-    "Field Extra 1": g("Field_extra1"),
-    "Field Extra 2": g("Field_extra2"),
-    "Field Extra 3": g("Field_extra3"),
-    "Field Extra 4": g("Field_extra4"),
-    "Field Extra 5": g("Field_extra5")
+    "In Use": xmlBool(partEl.getAttribute("in_Use"))
   };
   const name = data["Part Number"] || data["Part Name"] || "PART";
   const node = { name, type: "part", data, children: [] };
@@ -1506,8 +1595,11 @@ window.notImpl = notImpl;
 window.expandAll = expandAll;
 window.refreshTree = refreshTree;
 window.resetData = resetData;
+window.logout = logout;
 
 // Écran de connexion : clavier virtuel + suivi du champ actif + soumission
+// (toujours initialisé, même si on saute l'écran au démarrage, pour que
+// tout fonctionne correctement après un futur logout()).
 buildVirtualKeyboard();
 const loginUserEl = document.getElementById("loginUser");
 const loginPassEl = document.getElementById("loginPass");
@@ -1516,8 +1608,17 @@ const loginPassEl = document.getElementById("loginPass");
   el.addEventListener("keydown", (e) => { if (e.key === "Enter") checkLogin(); });
 });
 kbActiveField = loginUserEl;
-loginUserEl.focus();
 document.getElementById("loginSubmitBtn").addEventListener("click", checkLogin);
+
+// Si l'utilisateur s'est déjà connecté avec succès sur cet appareil/
+// navigateur, on saute directement l'écran de connexion.
+let alreadyAuthenticated = false;
+try { alreadyAuthenticated = localStorage.getItem(AUTH_STORAGE_KEY) === "true"; } catch (e) { /* stockage indisponible */ }
+if (alreadyAuthenticated) {
+  showApp();
+} else {
+  loginUserEl.focus();
+}
 
 renderTree();
 document.getElementById("statusText").textContent = "Chargement des données depuis Firebase...";
@@ -1529,6 +1630,7 @@ document.getElementById("statusText").textContent = "Chargement des données dep
     const saved = await loadSavedData();
     if (saved) {
       treeData = saved;
+      lastSavedSnapshot = JSON.parse(JSON.stringify(treeData)); // référence pour Reset
       markSaved(); // ce qui est affiché correspond exactement à Firebase
     } else {
       markDirty(); // rien d'enregistré sur Firebase pour l'instant
@@ -1546,6 +1648,34 @@ document.getElementById("statusText").textContent = "Chargement des données dep
 // e.g. below the last item, or in the margin) deselects everything.
 document.querySelector(".tree-panel").addEventListener("click", (e) => {
   if (!e.target.closest(".node-row")) deselectAll();
+});
+
+// Sur mobile (écran étroit), on déplace l'indicateur "Database State"
+// pour qu'il s'affiche au-dessus des boutons de la barre d'outils,
+// au lieu de rester dans la barre de statut tout en bas. Sur un
+// écran large, il reprend sa place normale dans la statusbar.
+const mobileLayoutQuery = window.matchMedia("(max-width: 700px)");
+function layoutDbStateForViewport() {
+  const dbStateBlock = document.getElementById("dbStateBlock");
+  const toolbar = document.getElementById("mainToolbar");
+  const statusbar = document.getElementById("mainStatusbar");
+  const appWindow = document.getElementById("appWindow");
+  if (!dbStateBlock || !toolbar || !statusbar || !appWindow) return;
+
+  if (mobileLayoutQuery.matches) {
+    appWindow.insertBefore(dbStateBlock, toolbar);
+  } else {
+    statusbar.appendChild(dbStateBlock);
+  }
+}
+mobileLayoutQuery.addEventListener("change", layoutDbStateForViewport);
+layoutDbStateForViewport();
+
+// Barre de recherche : filtre les Parts affichés dans l'arbre au fur
+// et à mesure de la frappe.
+document.getElementById("treeSearchInput").addEventListener("input", (e) => {
+  searchTerm = e.target.value.trim();
+  renderTree();
 });
 </script>
 
